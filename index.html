@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classifica F1</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 20px;
+            background-color: #101820;
+            color: #ffffff;
+        }
+        h1, h2 {
+            text-align: center;
+            color: #ff1801;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            background-color: #f4f4f4;
+            color: #000000;
+        }
+        table, th, td {
+            border: 1px solid #555;
+        }
+        th, td {
+            padding: 12px;
+            text-align: center;
+        }
+        th {
+            background-color: #ff1801;
+            color: #ffffff;
+            font-weight: bold;
+        }
+        button {
+            background-color: #ff1801;
+            color: #ffffff;
+            border: none;
+            padding: 12px 24px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #d41600;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+        #resetBtn {
+            background-color: #333333;
+            color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+    <h1>Gestione Classifica F1</h1>
+
+    <h2>Classifica Attuale</h2>
+    <table id="classificaTable">
+        <thead>
+            <tr>
+                <th>Posizione</th>
+                <th>Pilota</th>
+                <th>Punti</th>
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Classifica dinamica -->
+        </tbody>
+    </table>
+
+    <button id="resetBtn" onclick="resetData()">Resetta Dati</button>
+
+    <h2>Aggiungi un Gran Premio</h2>
+    <div>
+        <div class="form-group">
+            <label for="gpName">Luogo Gran Premio:</label>
+            <input type="text" id="gpName">
+        </div>
+        <div class="form-group">
+            <label for="gpYear">Anno:</label>
+            <input type="number" id="gpYear">
+        </div>
+        <div class="form-group">
+            <label for="gpResults">Ordine di arrivo (comma separati, es: ham, ver, lec):</label>
+            <input type="text" id="gpResults" placeholder="Esempio: ham, ver, lec">
+        </div>
+        <button onclick="addGranPremio()">Aggiungi Gran Premio</button>
+    </div>
+
+    <h2>Riepilogo Gran Premi</h2>
+    <table id="gpTable">
+        <thead>
+            <tr>
+                <th>Luogo</th>
+                <th>Anno</th>
+                <th>Ordine di Arrivo</th>
+                <th>Azioni</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Gran Premi dinamici -->
+        </tbody>
+    </table>
+
+    <button onclick="generatePDF()">Genera PDF Professionale</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script>
+        const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+        const FULL_NAMES = {
+            ham: "Hamilton",
+            ver: "Verstappen",
+            lec: "Leclerc",
+            pia: "Piastri",
+            sai: "Sainz",
+            rus: "Russell",
+            per: "Perez",
+            alo: "Alonso",
+            gas: "Gasly",
+            hul: "Hülkenberg",
+            tsu: "Tsunoda",
+            str: "Stroll",
+            oco: "Ocon",
+            mag: "Magnussen",
+            alb: "Albon",
+            ric: "Ricciardo",
+            zho: "Zhou",
+            bot: "Bottas",
+            sar: "Sargeant",
+            nor: "Norris"
+        };
+
+        let classifica = JSON.parse(localStorage.getItem('classifica')) || {};
+        let granPremi = JSON.parse(localStorage.getItem('granPremi')) || [];
+        let winsCount = {};  // Object to store the number of wins for each driver
+
+        function saveData() {
+            localStorage.setItem('classifica', JSON.stringify(classifica));
+            localStorage.setItem('granPremi', JSON.stringify(granPremi));
+        }
+
+        function loadData() {
+            classifica = JSON.parse(localStorage.getItem('classifica')) || {};
+            granPremi = JSON.parse(localStorage.getItem('granPremi')) || [];
+            updateClassificaTable();
+            updateGPTable();
+        }
+
+        function updateClassificaTable() {
+            const tbody = document.querySelector('#classificaTable tbody');
+            tbody.innerHTML = '';
+            const sortedClassifica = Object.entries(classifica).sort((a, b) => b[1] - a[1]);
+            sortedClassifica.forEach(([pilota, punti], index) => {
+                const row = `<tr>
+                    <td>${index + 1}</td>
+                    <td>${FULL_NAMES[pilota] || pilota}</td>
+                    <td>${punti}</td>
+                    <td><button onclick="removePilota('${pilota}')">Rimuovi</button></td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+
+        function updateGPTable() {
+            const tbody = document.querySelector('#gpTable tbody');
+            tbody.innerHTML = '';
+            granPremi.forEach((gp, index) => {
+                const arrivoEsteso = gp.arrivo.map(p => FULL_NAMES[p] || p).join(', ');
+                const row = `<tr>
+                    <td>${gp.luogo}</td>
+                    <td>${gp.anno}</td>
+                    <td>${arrivoEsteso}</td>
+                    <td><button onclick="editGranPremio(${index})">Modifica</button></td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        }
+
+        function addGranPremio() {
+            const luogo = document.getElementById('gpName').value.trim();
+            const anno = document.getElementById('gpYear').value.trim();
+            const arrivoInput = document.getElementById('gpResults').value.trim();
+
+            if (!/^(\w+, )*\w+$/.test(arrivoInput)) {
+                alert("Errore: L'ordine di arrivo deve essere una lista di nomi separati da virgole con spazi (es: ham, ver, lec)");
+                return;
+            }
+
+            const arrivo = arrivoInput.split(',').map(item => item.trim().toLowerCase());
+
+            granPremi.push({ luogo, anno, arrivo });
+
+            arrivo.forEach((pilota, index) => {
+                classifica[pilota] = (classifica[pilota] || 0) + (POINTS[index] || 0);
+            });
+
+            updateWinsCount();
+            saveData();
+            updateClassificaTable();
+            updateGPTable();
+
+            syncData();
+        }
+
+        function updateWinsCount() {
+            winsCount = {};
+            granPremi.forEach(gp => {
+                gp.arrivo.forEach((pilota, index) => {
+                    if (index === 0) {
+                        winsCount[pilota] = (winsCount[pilota] || 0) + 1;
+                    }
+                });
+            });
+        }
+
+        function editGranPremio(index) {
+            const gp = granPremi[index];
+            const nuovoLuogo = prompt('Modifica luogo del Gran Premio:', gp.luogo);
+            const nuovoAnno = prompt('Modifica anno del Gran Premio:', gp.anno);
+            const nuovoOrdine = prompt('Modifica ordine di arrivo (comma separati, es: ham, ver, lec):', gp.arrivo.join(', '));
+
+            if (!nuovoOrdine || !/^(\w+, )*\w+$/.test(nuovoOrdine)) {
+                alert("Errore: L'ordine di arrivo deve essere una lista di nomi separati da virgole con spazi (es: ham, ver, lec)");
+                return;
+            }
+
+            const vecchioOrdine = gp.arrivo;
+            const nuovoArrivo = nuovoOrdine.split(',').map(item => item.trim().toLowerCase());
+
+            gp.luogo = nuovoLuogo;
+            gp.anno = nuovoAnno;
+            gp.arrivo = nuovoArrivo;
+
+            vecchioOrdine.forEach((pilota, i) => {
+                classifica[pilota] -= (POINTS[i] || 0);
+            });
+
+            nuovoArrivo.forEach((pilota, i) => {
+                classifica[pilota] = (classifica[pilota] || 0) + (POINTS[i] || 0);
+            });
+
+            updateWinsCount();
+            saveData();
+            updateClassificaTable();
+            updateGPTable();
+
+            syncData();
+        }
+
+        function removePilota(pilota) {
+            delete classifica[pilota];
+            granPremi.forEach((gp) => {
+                gp.arrivo = gp.arrivo.filter(p => p !== pilota);
+            });
+            updateWinsCount();
+            saveData();
+            updateClassificaTable();
+            updateGPTable();
+
+            syncData();
+        }
+
+        function resetData() {
+            if (confirm('Sei sicuro di voler cancellare tutti i dati?')) {
+                classifica = {};
+                granPremi = [];
+                winsCount = {};
+                saveData();
+                updateClassificaTable();
+                updateGPTable();
+
+                syncData();
+            }
+        }
+
+        function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(18);
+            doc.setTextColor(255, 24, 1);
+            doc.text('Classifica Finale F1 - Stagione 2025', 105, 20, null, null, 'center');
+
+            // Classifica Table
+            doc.setFontSize(14);
+            doc.setTextColor(0, 0, 0);
+            const headers = ['Posizione', 'Pilota', 'Punti'];
+            const sortedClassifica = Object.entries(classifica).sort((a, b) => b[1] - a[1]);
+            const data = sortedClassifica.map(([pilota, punti], index) => [
+                index + 1,
+                FULL_NAMES[pilota] || pilota,
+                punti
+            ]);
+
+            let yPos = 40;
+            doc.text('Classifica Generale:', 10, yPos);
+            yPos += 10;
+
+            headers.forEach((header, i) => {
+                doc.text(header, 20 + i * 50, yPos);
+            });
+
+            yPos += 10;
+            data.forEach(row => {
+                row.forEach((cell, i) => {
+                    doc.text(String(cell), 20 + i * 50, yPos);
+                });
+                yPos += 10;
+            });
+
+            // GP Results
+            yPos += 15;
+            doc.text('Riepilogo Gran Premi:', 10, yPos);
+            yPos += 10;
+
+            granPremi.forEach((gp, index) => {
+                const arrivoEsteso = gp.arrivo.map(p => FULL_NAMES[p] || p).join(', ');
+                doc.text(`${index + 1}. ${gp.luogo} (${gp.anno}): ${arrivoEsteso}`, 10, yPos);
+                yPos += 10;
+            });
+
+            doc.save('classifica_f1.pdf');
+        }
+
+        // Funzione per sincronizzare i dati con il server
+        function syncData() {
+            const data = {
+                classifica: classifica,
+                granPremi: granPremi
+            };
+
+            fetch('https://your-server-url.com/save-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                console.log('Data sincronizzato con il server', result);
+            })
+            .catch(error => {
+                console.error('Errore sincronizzazione dati:', error);
+            });
+        }
+
+        // Caricamento dei dati iniziali quando il DOM è pronto
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+        });
+    </script>
+</body>
+</html>
